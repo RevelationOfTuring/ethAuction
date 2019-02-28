@@ -31,7 +31,7 @@ contract Auction {
 
     mapping(address=>mapping(uint=>Product)) stores;
 
-    mapping(uint=>address) public productIdToOwmer;
+    mapping(uint=>address payable) public productIdToOwmer;
 
     function addProductToStore(
     string memory _name,
@@ -173,14 +173,15 @@ contract Auction {
 
     mapping(uint=>Arbitration) proIndex2Arbitration;
 
-    function finalizeAuction(uint _productIndex)public {
-        address seller = productIdToOwmer[_productIndex];
+    function finalizeAuction(uint _productIndex)public payable{
+        address payable seller = productIdToOwmer[_productIndex];
         Product storage pro = stores[seller][_productIndex];
         address payable buyer = pro.highestBidder;
-        address arbitrator = msg.sender;
+        address payable arbitrator = msg.sender;
 
         require(arbitrator!=seller && arbitrator!=buyer);
-        require(now>=pro.auctionEndTime);
+        //you can't finalize the auction before the end of bidding
+        //require(now>=pro.auctionEndTime);
         require(pro.status==ProductStatus.OPEN);
 
         if(pro.totalBids==0){
@@ -188,6 +189,7 @@ contract Auction {
         }else{
             pro.status=ProductStatus.SOLD;
         }
+
         Arbitration arb = (new Arbitration).value(pro.highestBid)(arbitrator,seller,buyer);
 
         proIndex2Arbitration[_productIndex]=arb;
@@ -199,13 +201,17 @@ contract Auction {
 }
 
 contract Arbitration{
-    address arbitrator;
-    address seller;
-    address buyer;
+    address payable arbitrator;
+    address payable seller;
+    address payable buyer;
     uint totalVotes2Seller;
     uint totalVotes2Buyer;
+    bool isSpent ;
 
-    constructor(address _arbitrator,address _seller,address _buyer)public payable{
+    //show whether an address is voted
+    mapping(address=>bool) isAddressVoted;
+
+    constructor(address payable _arbitrator,address payable _seller,address payable _buyer)public payable{
         arbitrator=_arbitrator;
         seller=_seller;
         buyer=_buyer;
@@ -217,6 +223,33 @@ contract Arbitration{
 
     function getAritrationInfo()public view returns(address,address,address,uint,uint){
         return (arbitrator,seller,buyer,totalVotes2Seller,totalVotes2Buyer);
+    }
+
+    modifier callerLimit(address _operator){
+        require(_operator == arbitrator || _operator == seller || _operator == buyer);
+        _;
+    }
+
+    function vote2Seller(address _operator) public callerLimit(_operator) {
+        require(!isSpent);
+        require(!isAddressVoted[_operator]);
+        isAddressVoted[_operator]=true;
+
+        if(++totalVotes2Seller==2){
+            isSpent=true;
+            seller.transfer(address(this).balance);
+        }
+    }
+
+    function vote2Buyer(address _operator) public callerLimit(_operator) {
+        require(!isSpent);
+        require(!isAddressVoted[_operator]);
+        isAddressVoted[_operator]=true;
+
+        if(++totalVotes2Buyer==2){
+            isSpent=true;
+            buyer.transfer(address(this).balance);
+        }
     }
 }
 
