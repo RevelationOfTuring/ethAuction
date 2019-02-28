@@ -171,4 +171,52 @@ contract Auction {
         return (pro.highestBidder,pro.highestBid,pro.secondHighestBid,pro.totalBids);
     }
 
+    mapping(uint=>Arbitration) proIndex2Arbitration;
+
+    function finalizeAuction(uint _productIndex)public {
+        address seller = productIdToOwmer[_productIndex];
+        Product storage pro = stores[seller][_productIndex];
+        address payable buyer = pro.highestBidder;
+        address arbitrator = msg.sender;
+
+        require(arbitrator!=seller && arbitrator!=buyer);
+        require(now>=pro.auctionEndTime);
+        require(pro.status==ProductStatus.OPEN);
+
+        if(pro.totalBids==0){
+            pro.status=ProductStatus.UNSOLD;
+        }else{
+            pro.status=ProductStatus.SOLD;
+        }
+        Arbitration arb = (new Arbitration).value(pro.highestBid)(arbitrator,seller,buyer);
+
+        proIndex2Arbitration[_productIndex]=arb;
+
+        buyer.transfer(pro.highestBid-pro.secondHighestBid);
+    }
+
+
 }
+
+contract Arbitration{
+    address arbitrator;
+    address seller;
+    address buyer;
+    uint totalVotes2Seller;
+    uint totalVotes2Buyer;
+
+    constructor(address _arbitrator,address _seller,address _buyer)public payable{
+        arbitrator=_arbitrator;
+        seller=_seller;
+        buyer=_buyer;
+    }
+
+    function getBalance()public view returns(uint){
+        return address(this).balance;
+    }
+
+    function getAritrationInfo()public view returns(address,address,address,uint,uint){
+        return (arbitrator,seller,buyer,totalVotes2Seller,totalVotes2Buyer);
+    }
+}
+
