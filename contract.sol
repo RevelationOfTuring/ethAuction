@@ -33,6 +33,8 @@ contract Auction {
 
     mapping(uint=>address payable) public productIdToOwmer;
 
+    mapping(uint=>Arbitration) public proIndex2Arbitration;
+
     function addProductToStore(
     string memory _name,
     string memory _category,
@@ -171,7 +173,7 @@ contract Auction {
         return (pro.highestBidder,pro.highestBid,pro.secondHighestBid,pro.totalBids);
     }
 
-    mapping(uint=>Arbitration) proIndex2Arbitration;
+   // event test(address,address,address,ProductStatus,ProductStatus);
 
     function finalizeAuction(uint _productIndex)public payable{
         address payable seller = productIdToOwmer[_productIndex];
@@ -179,9 +181,11 @@ contract Auction {
         address payable buyer = pro.highestBidder;
         address payable arbitrator = msg.sender;
 
+       // emit test(seller,buyer,arbitrator,pro.status,ProductStatus.OPEN);
+
         require(arbitrator!=seller && arbitrator!=buyer);
-        //you can't finalize the auction before the end of bidding
-        //require(now>=pro.auctionEndTime);
+        // //you can't finalize the auction before the end of bidding
+        // //require(now>=pro.auctionEndTime);
         require(pro.status==ProductStatus.OPEN);
 
         if(pro.totalBids==0){
@@ -190,15 +194,30 @@ contract Auction {
             pro.status=ProductStatus.SOLD;
         }
 
-        Arbitration arb = (new Arbitration).value(pro.highestBid)(arbitrator,seller,buyer);
+        Arbitration arb = (new Arbitration).value(pro.secondHighestBid)(arbitrator,seller,buyer);
 
         proIndex2Arbitration[_productIndex]=arb;
 
         buyer.transfer(pro.highestBid-pro.secondHighestBid);
     }
 
+    function getArbitrationInfo(uint _productIndex) public view returns(address ,address,address,uint,uint){
+        Arbitration arb = proIndex2Arbitration[_productIndex];
+        return arb.getAritrationInfo();
 
+    }
+
+    function vote2Seller(uint _productIndex)public {
+        Arbitration arb=proIndex2Arbitration[_productIndex];
+        arb.vote2Seller(msg.sender);
+    }
+
+    function vote2Buyer(uint _productIndex)public {
+        Arbitration arb=proIndex2Arbitration[_productIndex];
+        arb.vote2Buyer(msg.sender);
+    }
 }
+
 
 contract Arbitration{
     address payable arbitrator;
@@ -211,7 +230,7 @@ contract Arbitration{
     //show whether an address is voted
     mapping(address=>bool) isAddressVoted;
 
-    constructor(address payable _arbitrator,address payable _seller,address payable _buyer)public payable{
+    constructor(address payable _arbitrator,address payable _seller,address payable _buyer) payable public {
         arbitrator=_arbitrator;
         seller=_seller;
         buyer=_buyer;
@@ -241,7 +260,7 @@ contract Arbitration{
         }
     }
 
-    function vote2Buyer(address _operator) public callerLimit(_operator) {
+    function vote2Buyer(address _operator)  public callerLimit(_operator) {
         require(!isSpent);
         require(!isAddressVoted[_operator]);
         isAddressVoted[_operator]=true;
