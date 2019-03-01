@@ -12,8 +12,8 @@ contract Auction {
         string descLink;
 
         uint startPrice;
-        uint auctionStartTime;
-        uint auctionEndTime;
+        uint revealStartTime;
+        uint arbitrateStartTime;
         //status if the product
         ProductStatus status;
         //new or used
@@ -41,8 +41,8 @@ contract Auction {
     string memory _imageLink,
     string memory _descLink,
     uint _startPrice,
-    uint _auctionStartTime,
-    uint _auctionEndTime,
+    uint _revealStartTime,
+    uint _arbitrateStartTime,
     ProductCondition _condition) public{
         productIndex++;
         Product memory pro =  Product({
@@ -52,8 +52,8 @@ contract Auction {
             imageLink:_imageLink,
             descLink:_descLink,
             startPrice:_startPrice,
-            auctionStartTime:_auctionStartTime,
-            auctionEndTime:_auctionEndTime,
+            revealStartTime:_revealStartTime,
+            arbitrateStartTime:_arbitrateStartTime,
             status:ProductStatus.OPEN,
             condition:_condition,
             highestBid:0,
@@ -84,12 +84,14 @@ contract Auction {
 
 
     function bid(uint _productIndex,uint _idealPrice,string memory _password) public payable{
+
         bytes memory bidInfo = abi.encodePacked(_idealPrice,_password);
         bytes32 bytesInfo = keccak256(bidInfo);
 
         //get the storage style of the Product,to change the "totalBids"
         address owner = productIdToOwmer[_productIndex];
         Product storage product = stores[owner][_productIndex];
+         require(now<product.revealStartTime);
         product.totalBids++;
 
         Bid memory b = Bid(_productIndex, msg.value, false, msg.sender);
@@ -117,8 +119,11 @@ contract Auction {
     event revealEvent(uint _productIndex,bytes32 bidBytes,uint highestBid,uint sencondHighestBid,uint refund);
 
     function revealBid(uint _productIndex,uint _idealPrice,string memory password)public {
+
         address owner = productIdToOwmer[_productIndex];
         Product storage pro = stores[owner][_productIndex];
+
+        require(now>=pro.revealStartTime && now<pro.arbitrateStartTime);
 
         bytes memory bidInfo = abi.encodePacked(_idealPrice,password);
         bytes32 bidBytes = keccak256(bidInfo);
@@ -178,6 +183,8 @@ contract Auction {
     function finalizeAuction(uint _productIndex)public payable{
         address payable seller = productIdToOwmer[_productIndex];
         Product storage pro = stores[seller][_productIndex];
+
+        require(now>=pro.arbitrateStartTime);
         address payable buyer = pro.highestBidder;
         address payable arbitrator = msg.sender;
 
